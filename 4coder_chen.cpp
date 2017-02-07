@@ -18,17 +18,17 @@ CUSTOM_COMMAND_SIG(LeaveModal)
 
 #define MODAL(FunctionName) command_##FunctionName
 #define MODALIFY(FunctionName, Key)                                     \
-    CUSTOM_COMMAND_SIG(MODAL(FunctionName)) {                           \
-        if (IsModal)                                                    \
-        {                                                               \
-            FunctionName(app);                                          \
-            IsModal = false;                                            \
-        }                                                               \
-        else                                                            \
-        {                                                               \
-            exec_command(app, write_character);                         \
-        }                                                               \
-    }
+CUSTOM_COMMAND_SIG(MODAL(FunctionName)) {                           \
+    if (IsModal)                                                    \
+    {                                                               \
+        FunctionName(app);                                          \
+        IsModal = false;                                            \
+    }                                                               \
+    else                                                            \
+    {                                                               \
+        exec_command(app, write_character);                         \
+    }                                                               \
+}
 
 MODALIFY(open_panel_vsplit, '3')
 MODALIFY(close_panel, '0')
@@ -39,18 +39,18 @@ MODALIFY(kill_buffer, 'k')
 
 void chen_keys(Bind_Helper *context){
     begin_map(context, mapid_global);
-
+    
     /*modal enter/leave*/
     bind(context, 'x', MDFR_CTRL, EnterModal);
     bind(context, 'g', MDFR_CTRL, LeaveModal);
     
-//    bind(context, 'p', MDFR_CTRL, open_panel_vsplit);
+    //    bind(context, 'p', MDFR_CTRL, open_panel_vsplit);
     bind(context, '_', MDFR_CTRL, open_panel_hsplit);
-//    bind(context, 'P', MDFR_CTRL, close_panel);
-//    bind(context, ',', MDFR_CTRL, change_active_panel);
+    //    bind(context, 'P', MDFR_CTRL, close_panel);
+    //    bind(context, ',', MDFR_CTRL, change_active_panel);
     
-//    bind(context, 'n', MDFR_CTRL, interactive_new);
-//    bind(context, 'o', MDFR_CTRL, interactive_open);
+    //    bind(context, 'n', MDFR_CTRL, interactive_new);
+    //    bind(context, 'o', MDFR_CTRL, interactive_open);
     bind(context, 'o', MDFR_ALT, open_in_other);
     bind(context, 'k', MDFR_CTRL, interactive_kill_buffer);
     bind(context, 'i', MDFR_CTRL, interactive_switch_buffer);
@@ -70,7 +70,7 @@ void chen_keys(Bind_Helper *context){
     bind(context, 'Z', MDFR_ALT, execute_previous_cli);
     
     bind(context, 'x', MDFR_ALT, execute_arbitrary_command);
-
+    
 #if 0    
     bind(context, 's', MDFR_ALT, show_scrollbar);
     bind(context, 'w', MDFR_ALT, hide_scrollbar);
@@ -199,8 +199,8 @@ void chen_keys(Bind_Helper *context){
     bind(context, key_back, MDFR_ALT, snipe_token_or_word);
     
     bind(context, ' ', MDFR_CTRL, set_mark);
-//    bind(context, 'a', MDFR_CTRL, replace_in_range);
-//    bind(context, 'c', MDFR_CTRL, copy);
+    //    bind(context, 'a', MDFR_CTRL, replace_in_range);
+    bind(context, 'w', MDFR_ALT, copy);
     bind(context, 'd', MDFR_CTRL, delete_range);
     bind(context, 'l', MDFR_CTRL, center_view);
     bind(context, 'E', MDFR_CTRL, left_adjust_view);
@@ -209,8 +209,8 @@ void chen_keys(Bind_Helper *context){
     bind(context, 'S', MDFR_ALT, list_all_substring_locations_case_insensitive);
     bind(context, 'g', MDFR_ALT, goto_line);
     bind(context, 'j', MDFR_CTRL, to_lowercase);
-//    bind(context, 'K', MDFR_CTRL, kill_buffer);
-//    bind(context, 'l', MDFR_CTRL, toggle_line_wrap);
+    //    bind(context, 'K', MDFR_CTRL, kill_buffer);
+    //    bind(context, 'l', MDFR_CTRL, toggle_line_wrap);
     bind(context, 'm', MDFR_CTRL, cursor_mark_swap);
     bind(context, 'O', MDFR_CTRL, reopen);
     bind(context, 'q', MDFR_CTRL, query_replace);
@@ -218,7 +218,7 @@ void chen_keys(Bind_Helper *context){
     bind(context, 's', MDFR_ALT, save);
     bind(context, 'T', MDFR_CTRL, list_all_locations_of_identifier);
     bind(context, 'u', MDFR_CTRL, to_uppercase);
-    bind(context, 'y', MDFR_ALT, paste_and_indent);
+    bind(context, 'y', MDFR_CTRL, paste_and_indent);
     bind(context, 'v', MDFR_ALT, toggle_virtual_whitespace);
     bind(context, 'V', MDFR_CTRL, paste_next_and_indent);
     bind(context, 'w', MDFR_CTRL, cut);
@@ -241,36 +241,36 @@ void chen_keys(Bind_Helper *context){
 
 /*
   Modal:
-
+  
   c-x enter
   c-g leave
  */
 
 /* Modal stuff:
-   
+
    c-x o -> switch pannel
    c-x 3 -> panel vsplit
    c-x 0 -> panel close
-
+   
    c-x n -> open new file
    c-x f -> interactive open
    c-x k -> kill buffer
  */
 
 /* Modified keys:
-   
-   m-s   -> save
 
+   m-s   -> save
+   
    all movement code
    begin_of_line and end_of_line
    page up, page down
-
+   
    alt-g  -> goto-line
    alt-w  -> copy
    ctr-w  -> cut
    
    ctr-l  -> center view
-
+   
    ctr-s  -> search
    ctr-S  -> search in all location
    alt-S  -> list all substring
@@ -282,5 +282,5 @@ void chen_keys(Bind_Helper *context){
   New Stuff:
   
    ctr-k   -> kill line
-  
+   
  */
