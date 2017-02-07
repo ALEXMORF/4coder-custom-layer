@@ -17,7 +17,7 @@ CUSTOM_COMMAND_SIG(LeaveModal)
 }
 
 #define MODAL(FunctionName) command_##FunctionName
-#define MODALIFY(FunctionName, Key)                                     \
+#define DEFINE_MODAL(FunctionName, Key)                                     \
 CUSTOM_COMMAND_SIG(MODAL(FunctionName)) {                           \
     if (IsModal)                                                    \
     {                                                               \
@@ -30,12 +30,12 @@ CUSTOM_COMMAND_SIG(MODAL(FunctionName)) {                           \
     }                                                               \
 }
 
-MODALIFY(open_panel_vsplit, '3')
-MODALIFY(close_panel, '0')
-MODALIFY(change_active_panel, 'o')
-MODALIFY(interactive_new, 'n')
-MODALIFY(interactive_open, 'f')
-MODALIFY(kill_buffer, 'k')
+DEFINE_MODAL(open_panel_vsplit, '3')
+DEFINE_MODAL(close_panel, '0')
+DEFINE_MODAL(change_active_panel, 'o')
+DEFINE_MODAL(interactive_new, 'n')
+DEFINE_MODAL(interactive_open, 'f')
+DEFINE_MODAL(kill_buffer, 'k')
 
 void chen_keys(Bind_Helper *context){
     begin_map(context, mapid_global);
@@ -185,6 +185,8 @@ void chen_keys(Bind_Helper *context){
     bind(context, 'a', MDFR_CTRL, seek_beginning_of_line);
     bind(context, 'v', MDFR_ALT, page_up);
     bind(context, 'v', MDFR_CTRL, page_down);
+    bind(context, key_page_up, MDFR_NONE, page_up);
+    bind(context, key_page_down, MDFR_NONE, page_down);
     
     bind(context, 'f', MDFR_ALT, seek_whitespace_right);
     bind(context, 'b', MDFR_ALT, seek_whitespace_left);
