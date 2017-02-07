@@ -223,7 +223,7 @@ void chen_keys(Bind_Helper *context){
     bind(context, 'V', MDFR_CTRL, paste_next_and_indent);
     bind(context, 'w', MDFR_CTRL, cut);
     bind(context, 'y', MDFR_CTRL, redo);
-    bind(context, '_', MDFR_CTRL, undo);
+    bind(context, 'z', MDFR_CTRL, undo);
     
     bind(context, '2', MDFR_CTRL, decrease_line_wrap);
     bind(context, '3', MDFR_CTRL, increase_line_wrap);
