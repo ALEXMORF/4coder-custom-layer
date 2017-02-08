@@ -72,23 +72,21 @@ CUSTOM_COMMAND_SIG(KillLine)
     CurrentPosSeek.pos = View.cursor.pos;
     int32_t LineEndPos = seek_line_end(app, &Buffer, View.cursor.pos);
 
-    if (LineEndPos != CurrentPosSeek.pos) //NOTE(chen): if there's anything to delete
+    if (view_set_mark(app, &View, CurrentPosSeek))
     {
-        if (view_set_mark(app, &View, CurrentPosSeek))
-        {
-            Buffer_Seek LineEndPosSeek = {};
-            LineEndPosSeek.type = buffer_seek_pos;
-            LineEndPosSeek.pos = LineEndPos;
+        Buffer_Seek LineEndPosSeek = {};
+        LineEndPosSeek.type = buffer_seek_pos;
+        LineEndPosSeek.pos = LineEndPos;
         
-            if (view_set_cursor(app, &View, LineEndPosSeek, true))
-            {
-                delete_range(app);
-            }
+        if (LineEndPos == CurrentPosSeek.pos) //NOTE(chen): if there's just the \n char, delete the \n then
+        {
+            LineEndPosSeek.pos += 1; 
         }
-    }
-    else //NOTE(chen): if already at the end of line
-    {
-        //TODO(chen): delete the \n char
+        
+        if (view_set_cursor(app, &View, LineEndPosSeek, true))
+        {
+            delete_range(app);
+        }
     }
 }
 
