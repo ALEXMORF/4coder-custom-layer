@@ -197,6 +197,7 @@ void chen_keys(Bind_Helper *context){
     bind(context, '}', MDFR_CTRL, open_long_braces_break);
     bind(context, 'i', MDFR_ALT, if0_off);
     bind(context, '1', MDFR_ALT, open_file_in_quotes);
+    bind(context, '2', MDFR_ALT, open_matching_file_cpp);
     bind(context, '0', MDFR_CTRL, write_zero_struct);
     bind(context, 'I', MDFR_CTRL, list_all_functions_current_buffer);
     
