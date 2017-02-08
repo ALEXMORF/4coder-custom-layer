@@ -62,7 +62,34 @@ CUSTOM_COMMAND_SIG(GotoEndOfFile)
 
 CUSTOM_COMMAND_SIG(KillLine)
 {
+    //NOTE(chen): accomplished by marking curent pos, mvoe cursor to the end of line, then delete range
     //TODO(chen): DO THIS
+    View_Summary View = get_active_view(app, AccessOpen|AccessProtected);
+    Buffer_Summary Buffer = get_buffer(app, View.buffer_id, AccessOpen|AccessProtected);
+    
+    Buffer_Seek CurrentPosSeek = {};
+    CurrentPosSeek.type = buffer_seek_pos;
+    CurrentPosSeek.pos = View.cursor.pos;
+    int32_t LineEndPos = seek_line_end(app, &Buffer, View.cursor.pos);
+
+    if (LineEndPos != CurrentPosSeek.pos) //NOTE(chen): if there's anything to delete
+    {
+        if (view_set_mark(app, &View, CurrentPosSeek))
+        {
+            Buffer_Seek LineEndPosSeek = {};
+            LineEndPosSeek.type = buffer_seek_pos;
+            LineEndPosSeek.pos = LineEndPos;
+        
+            if (view_set_cursor(app, &View, LineEndPosSeek, true))
+            {
+                delete_range(app);
+            }
+        }
+    }
+    else //NOTE(chen): if already at the end of line
+    {
+        //TODO(chen): delete the \n char
+    }
 }
 
 void chen_keys(Bind_Helper *context){
