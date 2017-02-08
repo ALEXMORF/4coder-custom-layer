@@ -97,7 +97,7 @@ void chen_keys(Bind_Helper *context){
     bind(context, '<', MDFR_ALT, GotoBeginOfFile);
     bind(context, '>', MDFR_ALT, GotoEndOfFile);
     bind(context, 'k', MDFR_CTRL, KillLine);
-
+    
     /*modal enter/leave*/
     bind(context, 'x', MDFR_CTRL, EnterModal);
     bind(context, 'g', MDFR_CTRL, LeaveModal);
@@ -260,7 +260,7 @@ void chen_keys(Bind_Helper *context){
     
     bind(context, ' ', MDFR_CTRL, set_mark);
     //    bind(context, 'a', MDFR_CTRL, replace_in_range);
-    bind(context, 'w', MDFR_ALT, copy);
+    bind(context, 'w', MDFR_ALT, copy); //TODO(chen): why the hell is this not working? investigate
     bind(context, 'd', MDFR_CTRL, delete_range);
     bind(context, 'l', MDFR_CTRL, center_view);
     bind(context, 'E', MDFR_CTRL, left_adjust_view);
