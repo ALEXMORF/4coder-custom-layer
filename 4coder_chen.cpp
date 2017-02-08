@@ -37,13 +37,46 @@ DEFINE_MODAL(interactive_new, 'n')
 DEFINE_MODAL(interactive_open, 'f')
 DEFINE_MODAL(kill_buffer, 'k')
 
+CUSTOM_COMMAND_SIG(GotoBeginOfFile)
+{
+    View_Summary ActiveView = get_active_view(app, AccessOpen|AccessProtected);
+    
+    Buffer_Seek NewCursorPos = {};
+    NewCursorPos.type = buffer_seek_pos;
+    NewCursorPos.pos = 0;
+    
+    view_set_cursor(app, &ActiveView, NewCursorPos, true);
+}
+
+CUSTOM_COMMAND_SIG(GotoEndOfFile)
+{
+    View_Summary ActiveView = get_active_view(app, AccessOpen|AccessProtected);
+    Buffer_Summary CurrentBuffer = get_buffer(app, ActiveView.buffer_id, AccessOpen|AccessProtected);
+
+    Buffer_Seek NewCursorPos = {};
+    NewCursorPos.type = buffer_seek_pos;
+    NewCursorPos.pos = CurrentBuffer.size; 
+
+    view_set_cursor(app, &ActiveView, NewCursorPos, true);
+}
+
+CUSTOM_COMMAND_SIG(KillLine)
+{
+    //TODO(chen): DO THIS
+}
+
 void chen_keys(Bind_Helper *context){
     begin_map(context, mapid_global);
     
+    /*chen's unique commands*/
+    bind(context, '<', MDFR_ALT, GotoBeginOfFile);
+    bind(context, '>', MDFR_ALT, GotoEndOfFile);
+    bind(context, 'k', MDFR_CTRL, KillLine);
+
     /*modal enter/leave*/
     bind(context, 'x', MDFR_CTRL, EnterModal);
     bind(context, 'g', MDFR_CTRL, LeaveModal);
-    
+
     //    bind(context, 'p', MDFR_CTRL, open_panel_vsplit);
     bind(context, '_', MDFR_CTRL, open_panel_hsplit);
     //    bind(context, 'P', MDFR_CTRL, close_panel);
@@ -52,7 +85,7 @@ void chen_keys(Bind_Helper *context){
     //    bind(context, 'n', MDFR_CTRL, interactive_new);
     //    bind(context, 'o', MDFR_CTRL, interactive_open);
     bind(context, 'o', MDFR_ALT, open_in_other);
-    bind(context, 'k', MDFR_CTRL, interactive_kill_buffer);
+    //    bind(context, 'k', MDFR_CTRL, interactive_kill_buffer);
     bind(context, 'i', MDFR_CTRL, interactive_switch_buffer);
     bind(context, 'w', MDFR_CTRL, save_as);
     
@@ -242,47 +275,47 @@ void chen_keys(Bind_Helper *context){
 #endif
 
 /*
-  Modal:
-  
-  c-x enter
-  c-g leave
- */
+Modal:
+
+c-x enter
+c-g leave
+*/
 
 /* Modal stuff:
 
-   c-x o -> switch pannel
-   c-x 3 -> panel vsplit
-   c-x 0 -> panel close
-   
-   c-x n -> open new file
-   c-x f -> interactive open
-   c-x k -> kill buffer
- */
+c-x o -> switch pannel
+c-x 3 -> panel vsplit
+c-x 0 -> panel close
+
+c-x n -> open new file
+c-x f -> interactive open
+c-x k -> kill buffer
+*/
 
 /* Modified keys:
 
-   m-s   -> save
-   
-   all movement code
-   begin_of_line and end_of_line
-   page up, page down
-   
-   alt-g  -> goto-line
-   alt-w  -> copy
-   ctr-w  -> cut
-   
-   ctr-l  -> center view
-   
-   ctr-s  -> search
-   ctr-S  -> search in all location
-   alt-S  -> list all substring
-   ctr-y  -> paste
-   ctr-_  -> undo
- */
+m-s   -> save
+
+all movement code
+begin_of_line and end_of_line
+page up, page down
+
+alt-g  -> goto-line
+alt-w  -> copy
+ctr-w  -> cut
+
+ctr-l  -> center view
+
+ctr-s  -> search
+ctr-S  -> search in all location
+alt-S  -> list all substring
+ctr-y  -> paste
+ctr-_  -> undo
+*/
 
 /*
-  New Stuff:
-  
-   ctr-k   -> kill line
-   
- */
+New Stuff:
+
+ctr-k   -> kill line
+
+*/
