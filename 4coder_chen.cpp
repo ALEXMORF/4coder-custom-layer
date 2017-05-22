@@ -6,7 +6,29 @@ static bool IsModal = false;
 static bool HasDefaultBarColor = false;
 
 static int_color DefaultBarColor = 0;
+static int_color DefaultMarginColor = 0;
 static int_color ModalBarColor = 0x964421;
+static int_color ModalMarginColor = 0x964421;
+
+inline int_color
+GetThemeColor(Application_Links *app, Style_Tag tag)
+{
+    int_color Result = 0;
+    
+    Theme_Color Color = {};
+    Color.tag = tag;
+    get_theme_colors(app, &Color, 1);
+
+    Result = Color.color;
+    return Result;
+}
+
+inline void
+SetThemeColor(Application_Links *app, Style_Tag tag, int_color Color)
+{
+    Theme_Color ThemeColor = {tag, Color};
+    set_theme_colors(app, &ThemeColor, 1);
+}
 
 CUSTOM_COMMAND_SIG(EnterModal)
 {
@@ -15,24 +37,20 @@ CUSTOM_COMMAND_SIG(EnterModal)
     if (!HasDefaultBarColor)
     {
         HasDefaultBarColor = true;
-
-        //retrieve default bar color
-        Theme_Color BarColor = {};
-        BarColor.tag = Stag_Bar;
-        get_theme_colors(app, &BarColor, 1);
-        DefaultBarColor = BarColor.color;
+        
+        DefaultBarColor = GetThemeColor(app, Stag_Bar);
+        DefaultMarginColor = GetThemeColor(app, Stag_Margin_Active);
     }
 
-    Theme_Color BarColor = {Stag_Bar, ModalBarColor};
-    set_theme_colors(app, &BarColor, 1);
+    SetThemeColor(app, Stag_Bar, ModalBarColor);
+    SetThemeColor(app, Stag_Margin_Active, ModalMarginColor);
 }
 
 CUSTOM_COMMAND_SIG(LeaveModal)
 {
     IsModal = false;
-
-    Theme_Color BarColor = {Stag_Bar, DefaultBarColor};
-    set_theme_colors(app, &BarColor, 1);
+    SetThemeColor(app, Stag_Bar, DefaultBarColor);
+    SetThemeColor(app, Stag_Margin_Active, DefaultMarginColor);
 }    
 
 #define MODAL(FunctionName) command_##FunctionName
