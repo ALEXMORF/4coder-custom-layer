@@ -1,20 +1,39 @@
-#if !defined(FCODER_CHEN)
-#define FCODER_CHEN
-
-#define USE_CHEN_BINDING true
+#if !defined(FCODER_EMACS)
+#define FCODER_EMACS
 
 //states
 static bool IsModal = false;
+static bool HasDefaultBarColor = false;
+
+static int_color DefaultBarColor = 0;
+static int_color ModalBarColor = 0x964421;
 
 CUSTOM_COMMAND_SIG(EnterModal)
 {
     IsModal = true;
+
+    if (!HasDefaultBarColor)
+    {
+        HasDefaultBarColor = true;
+
+        //retrieve default bar color
+        Theme_Color BarColor = {};
+        BarColor.tag = Stag_Bar;
+        get_theme_colors(app, &BarColor, 1);
+        DefaultBarColor = BarColor.color;
+    }
+
+    Theme_Color BarColor = {Stag_Bar, ModalBarColor};
+    set_theme_colors(app, &BarColor, 1);
 }
 
 CUSTOM_COMMAND_SIG(LeaveModal)
 {
     IsModal = false;
-}
+
+    Theme_Color BarColor = {Stag_Bar, DefaultBarColor};
+    set_theme_colors(app, &BarColor, 1);
+}    
 
 #define MODAL(FunctionName) command_##FunctionName
 #define DEFINE_MODAL(FunctionName, Key)                                     \
@@ -22,7 +41,7 @@ CUSTOM_COMMAND_SIG(MODAL(FunctionName)) {                           \
     if (IsModal)                                                    \
     {                                                               \
         FunctionName(app);                                          \
-        IsModal = false;                                            \
+        LeaveModal(app);                                               \
     }                                                               \
     else                                                            \
     {                                                               \
@@ -52,11 +71,11 @@ CUSTOM_COMMAND_SIG(GotoEndOfFile)
 {
     View_Summary ActiveView = get_active_view(app, AccessOpen|AccessProtected);
     Buffer_Summary CurrentBuffer = get_buffer(app, ActiveView.buffer_id, AccessOpen|AccessProtected);
-
+    
     Buffer_Seek NewCursorPos = {};
     NewCursorPos.type = buffer_seek_pos;
     NewCursorPos.pos = CurrentBuffer.size; 
-
+    
     view_set_cursor(app, &ActiveView, NewCursorPos, true);
 }
 
@@ -71,7 +90,7 @@ CUSTOM_COMMAND_SIG(KillLine)
     CurrentPosSeek.type = buffer_seek_pos;
     CurrentPosSeek.pos = View.cursor.pos;
     int32_t LineEndPos = seek_line_end(app, &Buffer, View.cursor.pos);
-
+    
     if (view_set_mark(app, &View, CurrentPosSeek))
     {
         Buffer_Seek LineEndPosSeek = {};
@@ -90,18 +109,27 @@ CUSTOM_COMMAND_SIG(KillLine)
     }
 }
 
-void chen_keys(Bind_Helper *context){
+CUSTOM_COMMAND_SIG(SetDOSMode)
+{
+    View_Summary View = get_active_view(app, AccessOpen|AccessProtected);
+    Buffer_Summary Buffer = get_buffer(app, View.buffer_id, AccessOpen|AccessProtected);
+    
+    buffer_set_setting(app, &Buffer, BufferSetting_Eol, 1);
+}
+
+void emacs_keys(Bind_Helper *context){
     begin_map(context, mapid_global);
     
     /*chen's unique commands*/
     bind(context, '<', MDFR_ALT, GotoBeginOfFile);
     bind(context, '>', MDFR_ALT, GotoEndOfFile);
     bind(context, 'k', MDFR_CTRL, KillLine);
+    bind(context, '1', MDFR_CTRL, SetDOSMode);
     
     /*modal enter/leave*/
     bind(context, 'x', MDFR_CTRL, EnterModal);
     bind(context, 'g', MDFR_CTRL, LeaveModal);
-
+    
     //    bind(context, 'p', MDFR_CTRL, open_panel_vsplit);
     bind(context, '_', MDFR_CTRL, open_panel_hsplit);
     //    bind(context, 'P', MDFR_CTRL, close_panel);
@@ -125,7 +153,7 @@ void chen_keys(Bind_Helper *context){
     bind(context, 'm', MDFR_ALT, build_in_build_panel);
     
     bind(context, 'z', MDFR_ALT, execute_any_cli);
-    bind(context, 'Z', MDFR_ALT, execute_previous_cli);
+    bind(context, '`', MDFR_ALT, execute_previous_cli);
     
     bind(context, 'x', MDFR_ALT, execute_arbitrary_command);
     
