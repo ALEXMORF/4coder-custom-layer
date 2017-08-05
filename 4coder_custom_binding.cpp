@@ -884,7 +884,12 @@ CUSTOM_COMMAND_SIG(insert_character)
             refresh_view(app, &view);
             
             enter_mode<mapid_normal>(app);
+            
             return;
+        }
+        else
+        {
+            global_editor_state.j_is_pressed = false;
         }
     }
     else
