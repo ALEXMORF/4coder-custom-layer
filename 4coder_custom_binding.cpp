@@ -1,8 +1,6 @@
 //TODO(Chen): undo doesn't undo the "jk" stroke
-//TODO(Chen): a better color scheme
 //TODO(Chen): implement the dot command
 //TODO(Chen): have a easier way to change keymaps easily (data-driven instead of code)
-//TODO(Chen): fix the seek* operations that are 1 letter off for some reason
 
 //TODO(Chen): BUGS:
 //TODO(Chen): fix visual mode's weird behavior
@@ -954,6 +952,7 @@ custom_keys(Bind_Helper *context){
     bind(context, 'E', MDFR_ALT, exit_4coder);
     bind(context, 'z', MDFR_CTRL, undo);
     bind(context, 'I', MDFR_CTRL, list_all_functions_current_buffer);
+    bind(context, 'F', MDFR_CTRL, list_all_locations);
     bind(context, 'w', MDFR_CTRL, window_chord);
     
     bind(context, 'd', MDFR_CTRL, page_down);
@@ -961,7 +960,7 @@ custom_keys(Bind_Helper *context){
     bind(context, '.', MDFR_ALT, change_to_build_panel);
     bind(context, ',', MDFR_ALT, close_build_panel);
     bind(context, 'n', MDFR_ALT, goto_next_error);
-    bind(context, 'N', MDFR_ALT, goto_prev_error);
+    bind(context, 'p', MDFR_ALT, goto_prev_error);
     bind(context, 'M', MDFR_ALT, goto_first_error);
     bind(context, 'm', MDFR_ALT, build_in_build_panel);
     bind(context, 'z', MDFR_ALT, execute_any_cli);
@@ -1016,7 +1015,7 @@ custom_keys(Bind_Helper *context){
     bind(context, 'I', MDFR_NONE, insert_beginning_of_line);
     bind(context, 'r', MDFR_NONE, replace_char);
     bind(context, 'x', MDFR_NONE, delete_char);
-    bind(context, '\n', MDFR_NONE, newline_or_goto_position);
+    bind(context, '\n', MDFR_NONE, newline_or_goto_position_same_panel);
     
     bind(context, 'v', MDFR_NONE, enter_mode<mapid_visual>);
     bind(context, '.', MDFR_NONE, dot_command);
@@ -1164,10 +1163,24 @@ OPEN_FILE_HOOK_SIG(custom_file_settings)
     return(0);
 }
 
+START_HOOK_SIG(custom_start){
+    default_4coder_initialize(app);
+    
+    default_4coder_side_by_side_panels(app, files, file_count);
+    
+    if (automatically_load_project){
+        load_project(app);
+    }
+    
+    // no meaning for return
+    return(0);
+}
+
 extern "C" int32_t
 get_bindings(void *data, int32_t size){
     Bind_Helper context = begin_bind_helper(data, size);
     set_all_default_hooks(&context);
+    set_start_hook(&context, custom_start);
     set_open_file_hook(&context, custom_file_settings);
     custom_keys(&context);
     
