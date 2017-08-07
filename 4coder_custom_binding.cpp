@@ -1068,10 +1068,6 @@ custom_keys(Bind_Helper *context){
 
 OPEN_FILE_HOOK_SIG(custom_file_settings)
 {
-    char *extra_code_file_extensions[] = {
-        "glsl",
-    };
-    
     Buffer_Summary buffer = get_buffer(app, buffer_id, AccessAll);
     Assert(buffer.exists);
     
@@ -1087,14 +1083,6 @@ OPEN_FILE_HOOK_SIG(custom_file_settings)
     if (buffer.file_name != 0 && buffer.size < (16 << 20)){
         String name = make_string(buffer.file_name, buffer.file_name_len);
         String ext = file_extension(name);
-        
-        for (int32_t i = 0; i < ArrayCount(extra_code_file_extensions); ++i)
-        {
-            if (match(ext, extra_code_file_extensions[i]))
-            {
-                treat_as_code = true;
-            }
-        }
         
         for (int32_t i = 0; i < extension_count; ++i){
             if (match(ext, extension_list[i])){
