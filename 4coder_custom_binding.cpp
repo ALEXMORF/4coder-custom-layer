@@ -1,8 +1,8 @@
-//TODO(Chen): undo doesn't undo the "jk" stroke
 //TODO(Chen): implement the dot command
 //TODO(Chen): have a easier way to change keymaps easily (data-driven instead of code)
 
 //TODO(Chen): BUGS:
+//TODO(Chen): undo doesn't undo the "jk" stroke
 //TODO(Chen): fix visual mode's weird behavior
 
 #if !defined(FCODER_CUSTOM_BINDINGS)
@@ -11,6 +11,7 @@
 #include "4coder_default_include.cpp"
 
 #define debug_print(str) print_message(app, str, (int32_t)strlen(str))
+#define cstr_to_string(str) make_string(str, (int32_t)strlen(str))
 
 #define RIGHT true
 #define LEFT false
@@ -149,6 +150,11 @@ max(int32_t a, int32_t b)
     return a > b? a: b;
 }
 
+struct Static_String
+{
+    char str[100];
+};
+
 static struct
 {
     bool is_in_visual_mode = false;
@@ -159,7 +165,9 @@ static struct
     
     bool j_is_pressed = false;
     
-    Custom_Command_Function *LastCommand;
+    int current_index;
+    int autocomplete_candidate_count;
+    Static_String autocomplete_command_candidates[10];
 } global_editor_state;
 
 inline void
@@ -726,8 +734,69 @@ CUSTOM_COMMAND_SIG(open_hsplit_panel)
     set_active_view(app, &view);
 }
 
+static void
+restart_autocompletion()
+{
+    global_editor_state.autocomplete_candidate_count = 0;
+    global_editor_state.current_index = 0;
+}
+
+static void
+insert_autocomplete_candidate(char *str, int len)
+{
+    char *candidate_buffer = global_editor_state.autocomplete_command_candidates[global_editor_state.autocomplete_candidate_count++].str;
+    strcpy(candidate_buffer, str);
+    candidate_buffer[len] = 0;
+}
+
+static bool
+autocomplete_not_full()
+{
+    return global_editor_state.autocomplete_candidate_count < ArrayCount(global_editor_state.autocomplete_command_candidates);
+}
+
+static char *
+get_autocomplete_candidate()
+{
+    return global_editor_state.autocomplete_command_candidates[global_editor_state.current_index].str;
+}
+
+static char * 
+get_next_autocomplete_candidate()
+{
+    global_editor_state.current_index = (global_editor_state.current_index + 1) % global_editor_state.autocomplete_candidate_count;
+    return global_editor_state.autocomplete_command_candidates[global_editor_state.current_index].str;
+}
+
 CUSTOM_COMMAND_SIG(command_chord)
 {
+    struct command
+    {
+        char *name;
+        Custom_Command_Function *function;
+    };
+    
+    static const command commands[] = {
+        {"bd", kill_buffer},
+        {"bb", interactive_switch_buffer},
+        {"w", save},
+        {"vs", open_vsplit_panel},
+        {"hs", open_hsplit_panel},
+        {"q", close_panel},
+        {"q!", exit_4coder},
+        {"qa", exit_4coder},
+        {"e", interactive_open_or_new},
+        {"e!", reopen},
+        {"load project", load_project},
+        {"open all code", open_all_code},
+        {"open all code recursive", open_all_code_recursive},
+        {"close all code", close_all_code},
+        {"dos lines", eol_dosify},
+        {"dosify", eol_dosify},
+        {"nix lines", eol_nixify},
+        {"nixify", eol_nixify},
+    };
+    
     char command[100] = {};
     String command_string = make_fixed_width_string(command);
     
@@ -736,62 +805,60 @@ CUSTOM_COMMAND_SIG(command_chord)
     command_bar.prompt = make_lit_string(":");
     command_bar.string = command_string;
     
-    for (;;) 
+    bool autocomplete_cycling = false;
+    bool command_done = false;
+    while (!command_done) 
     {
-        //NOTE(Chen): I know I can probably use a dict here but no thanks
         User_Input in = get_user_input(app, EventOnAnyKey, EventOnEsc | EventOnButton);
         if (in.abort) break;
+        
+        if (in.key.keycode == '\t')
+        {
+            if (!autocomplete_cycling) //initialize the autocomplete candidate list
+            {
+                restart_autocompletion();
+                
+                for (int i = 0; i < ArrayCount(commands); ++i)
+                {
+                    if (match_part_ss(cstr_to_string(commands[i].name), command_bar.string))
+                    {
+                        if (autocomplete_not_full())
+                        {
+                            insert_autocomplete_candidate(commands[i].name, (int32_t)strlen(commands[i].name));
+                            
+                            debug_print("inserted command: ");
+                            debug_print(commands[i].name);
+                            debug_print("\n");
+                        }
+                    }
+                }
+                insert_autocomplete_candidate(command_string.str, command_string.size);
+                autocomplete_cycling = true;
+                
+                char *current_candidate = get_autocomplete_candidate();
+                copy_ss(&command_string, cstr_to_string(current_candidate));
+            }
+            else //cycle through the autocomplete candidate list
+            {
+                char *current_candidate = get_next_autocomplete_candidate();
+                copy_ss(&command_string, cstr_to_string(current_candidate));
+            }
+        }
+        else
+        {
+            autocomplete_cycling = false;
+        }
+        
         if (in.key.keycode == '\n') {
-            if (match_ss(command_string, make_lit_string("bd"))) {
-                exec_command(app, kill_buffer);
-            }
-            if (match_ss(command_string, make_lit_string("bb"))) {
-                exec_command(app, interactive_switch_buffer);
-            }
-            if(match_ss(command_string, make_lit_string("w"))) {
-                exec_command(app, save);
-            }
-            if (match_ss(command_string, make_lit_string("vs"))) {
-                exec_command(app, open_vsplit_panel);
-            }
-            if (match_ss(command_string, make_lit_string("hs"))) {
-                exec_command(app, open_hsplit_panel);
-            }
-            if (match_ss(command_string, make_lit_string("q"))) {
-                exec_command(app, close_panel);
-            }
-            if (match_ss(command_string, make_lit_string("q!"))) {
-                exec_command(app, exit_4coder);
-            }
-            if (match_ss(command_string, make_lit_string("qa"))) {
-                exec_command(app, exit_4coder);
-            }
-            if (match_ss(command_string, make_lit_string("e"))) {
-                exec_command(app, interactive_open_or_new);
-            }
-            if (match_ss(command_string, make_lit_string("e!"))) {
-                exec_command(app, reopen);
-            }
             
-            if (match_ss(command_string, make_lit_string("load project"))){
-                exec_command(app, load_project);
-            }
-            if (match_ss(command_string, make_lit_string("open all code"))){
-                exec_command(app, open_all_code);
-            }
-            if (match_ss(command_string, make_lit_string("open all code recursive"))){
-                exec_command(app, open_all_code_recursive);
-            }
-            if(match_ss(command_string, make_lit_string("close all code"))){
-                exec_command(app, close_all_code);
-            }
-            if (match_ss(command_string, make_lit_string("dos lines")) ||
-                match_ss(command_string, make_lit_string("dosify"))){
-                exec_command(app, eol_dosify);
-            }
-            if (match_ss(command_string, make_lit_string("nix lines")) ||
-                match_ss(command_string, make_lit_string("nixify"))){
-                exec_command(app, eol_nixify);
+            for (int i = 0; i < ArrayCount(commands); ++i)
+            {
+                if (match_ss(command_string, make_string(commands[i].name, (int32_t)strlen(commands[i].name))))
+                {
+                    exec_command(app, commands[i].function);
+                    command_done = true;
+                    break;
+                }
             }
             
             if (match_ss(substr(command_string, 0, 1), make_lit_string("!"))) {
@@ -814,7 +881,7 @@ CUSTOM_COMMAND_SIG(command_chord)
                 command_string.size -= 1;
             }
         }
-        else
+        else if (in.key.keycode != '\t')
         {
             append_s_char(&command_string, (char)in.key.character);
         }
