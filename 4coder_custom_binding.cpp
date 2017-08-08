@@ -436,6 +436,18 @@ delete_portion(Application_Links *app, Key_Movement key_movement)
     }
 }
 
+inline bool
+is_digit(char character)
+{
+    return character >= '0' && character <= '9';
+}
+
+inline int
+to_digit(char character)
+{
+    return character - '0';
+}
+
 CUSTOM_COMMAND_SIG(delete_chord)
 {
     set_theme_color(app, Stag_Cursor, Transient_Color);
@@ -443,10 +455,20 @@ CUSTOM_COMMAND_SIG(delete_chord)
     User_Input in = get_user_input(app, EventOnAnyKey, EventOnEsc);
     if (!in.abort) 
     {
+        int repeat_time = 1;
+        if (is_digit((char)in.key.keycode))
+        {
+            repeat_time = to_digit((char)in.key.keycode);
+            in = get_user_input(app, EventOnAnyKey, EventOnEsc);
+        }
+        
         Key_Movement key_movement = get_key_movement((char)in.key.keycode);
         if (key_movement.seeker)
         {
-            delete_portion(app, key_movement);
+            for (int i = 0; i < repeat_time; ++i)
+            {
+                delete_portion(app, key_movement);
+            }
         }
     }
     
@@ -464,10 +486,20 @@ CUSTOM_COMMAND_SIG(overwrite_chord)
         return;
     }
     
+    int repeat_time = 1;
+    if (is_digit((char)in.key.keycode))
+    {
+        repeat_time = to_digit((char)in.key.keycode);
+        in = get_user_input(app, EventOnAnyKey, EventOnEsc);
+    }
+    
     Key_Movement key_movement = get_key_movement((char)in.key.keycode);
     if (key_movement.seeker)
     {
-        delete_portion(app, key_movement);
+        for (int i = 0; i < repeat_time; ++i) 
+        {
+            delete_portion(app, key_movement);
+        }
         enter_mode<mapid_insert>(app);
     }
     else
@@ -706,6 +738,7 @@ CUSTOM_COMMAND_SIG(command_chord)
     
     for (;;) 
     {
+        //NOTE(Chen): I know I can probably use a dict here but no thanks
         User_Input in = get_user_input(app, EventOnAnyKey, EventOnEsc | EventOnButton);
         if (in.abort) break;
         if (in.key.keycode == '\n') {
@@ -728,6 +761,9 @@ CUSTOM_COMMAND_SIG(command_chord)
                 exec_command(app, close_panel);
             }
             if (match_ss(command_string, make_lit_string("q!"))) {
+                exec_command(app, exit_4coder);
+            }
+            if (match_ss(command_string, make_lit_string("qa"))) {
                 exec_command(app, exit_4coder);
             }
             if (match_ss(command_string, make_lit_string("e"))) {
