@@ -1185,6 +1185,17 @@ CUSTOM_COMMAND_SIG(command_chord)
             autocomplete_cycling = false;
         }
         
+        //NOTE(Chen): this is hacky but, what can you do
+        if (in.key.keycode == ' ')
+        {
+            if (match_ss(command_string, make_lit_string("e")))
+            {
+                command_to_exec = interactive_open_or_new;
+                command_done = true;
+                break;
+            }
+        }
+        
         if (in.key.keycode == '\n') {
             
             for (int i = 0; i < ArrayCount(commands); ++i)
@@ -1328,7 +1339,7 @@ CUSTOM_COMMAND_SIG(insert_character)
             
             return;
         }
-        else
+        else if (character != 'j')
         {
             global_editor_state.j_is_pressed = false;
         }
