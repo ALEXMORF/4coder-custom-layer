@@ -1,3 +1,5 @@
+//TODO(Chen): implement a function of GotoAnything(), such as function definition, type definition, macro definition (like the one in sublime text)
+//TODO(Chen): implement builtin imenu feature
 //TODO(Chen): implement builtin ctag feature
 //TODO(Chen): implement the dot command
 //TODO(Chen): have a easier way to change keymaps easily (data-driven instead of code)
@@ -1130,6 +1132,7 @@ CUSTOM_COMMAND_SIG(command_chord)
         {"nixify", eol_nixify},
         {"quick calc", quick_calc},
     };
+    Custom_Command_Function *command_to_exec = 0;
     
     char command[100] = {};
     String command_string = make_fixed_width_string(command);
@@ -1188,7 +1191,7 @@ CUSTOM_COMMAND_SIG(command_chord)
             {
                 if (match_ss(command_string, make_string(commands[i].name, (int32_t)strlen(commands[i].name))))
                 {
-                    exec_command(app, commands[i].function);
+                    command_to_exec = commands[i].function;
                     command_done = true;
                     break;
                 }
@@ -1222,6 +1225,10 @@ CUSTOM_COMMAND_SIG(command_chord)
     }
     
     end_query_bar(app, &command_bar, 0);
+    if (command_to_exec)
+    {
+        exec_command(app, command_to_exec);
+    }
 }
 
 CUSTOM_COMMAND_SIG(insert_under)
