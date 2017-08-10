@@ -1,3 +1,4 @@
+//TODO(Chen): implement quick calc
 //TODO(Chen): implement the dot command
 //TODO(Chen): have a easier way to change keymaps easily (data-driven instead of code)
 
@@ -142,6 +143,7 @@ Key_Movement global_key_movements[] = {
 // System
 
 #include <stdio.h>
+#include <math.h>
 #include <stdarg.h>
 
 inline int32_t
@@ -734,6 +736,337 @@ CUSTOM_COMMAND_SIG(open_hsplit_panel)
     set_active_view(app, &view);
 }
 
+enum Token_Type
+{
+    Token_Type_Operator,
+    Token_Type_Number,
+    Token_Type_LeftBracket,
+    Token_Type_RightBracket,
+};
+
+struct Token
+{
+    Token_Type type;
+    union
+    {
+        float as_number;
+        char as_operator;
+    };
+};
+
+inline Token
+number_token(float number)
+{
+    Token result = {};
+    
+    result.as_number = number;
+    result.type = Token_Type_Number;
+    
+    return result;
+}
+
+inline Token
+operator_token(char op)
+{
+    Token result = {};
+    
+    result.as_operator = op;
+    result.type = Token_Type_Operator;
+    
+    return result;
+}
+
+inline Token
+left_bracket_token()
+{
+    Token result = {};
+    result.type = Token_Type_LeftBracket;
+    return result;
+}
+
+inline Token
+right_bracket_token()
+{
+    Token result = {};
+    result.type = Token_Type_RightBracket;
+    return result;
+}
+
+inline float
+consume_number(char **string, bool *HasError)
+{
+    float num = 0.0f;
+    
+    while (is_digit(**string))
+    {
+        char C = **string;
+        
+        if (is_digit(C))
+        {
+            num *= 10.0f;
+            num += (float)to_digit(C);
+        }
+        
+        ++*string;
+    }
+    
+    if (**string == '.')
+    {
+        ++*string;
+        
+        if (is_digit(**string))
+        {
+            float multiplier = 0.1f;
+            while (is_digit(**string))
+            {
+                char C = **string;
+                
+                if (is_digit(C))
+                {
+                    num += (float)to_digit(C) * multiplier;
+                    multiplier *= 0.1f;
+                }
+                
+                ++*string;
+            }
+        }
+        else
+        {
+            *HasError = true;
+        }
+    }
+    
+    return num;
+}
+
+inline bool
+higher_or_equal_precedence(char op, char other)
+{
+    struct Op
+    {
+        char c;
+        int precedence;
+    };
+    
+    Op ops[] = {
+        {'+', 1},
+        {'-', 1},
+        {'*', 2},
+        {'/', 2},
+    };
+    
+    int op_precedence = -1;
+    for (int i = 0; i < ArrayCount(ops); ++i)
+    {
+        if (op == ops[i].c)
+        {
+            op_precedence = ops[i].precedence;
+        }
+    }
+    int other_precedence = -1;
+    for (int i = 0; i < ArrayCount(ops); ++i)
+    {
+        if (other == ops[i].c)
+        {
+            other_precedence = ops[i].precedence;
+        }
+    }
+    
+    return op_precedence >= other_precedence;
+}
+
+//TODO
+inline float
+evaluate_expression(char *ExpressionString, bool *HasError)
+{
+    float result = 0.0f;
+    
+    char op_stack[50] = {};
+    int op_count = 0;
+    Token token_output[50] = {};
+    int token_count = 0;
+    
+    //shunting-yard tokens
+    while (*ExpressionString)
+    {
+        while (*ExpressionString == ' ') ++ExpressionString;
+        
+        if (is_digit(*ExpressionString))
+        {
+            float next_num = consume_number(&ExpressionString, HasError);
+            
+            if (*HasError || token_count >= ArrayCount(token_output))
+            {
+                *HasError = true;
+                break;
+            }
+            
+            token_output[token_count++] = number_token(next_num);
+        }
+        else if (*ExpressionString == '+' || *ExpressionString == '-' ||
+                 *ExpressionString == '*' || *ExpressionString == '/')
+        {
+            char current_op = *ExpressionString;
+            
+            while (op_count > 0 && higher_or_equal_precedence(op_stack[op_count-1], current_op))
+            {
+                token_output[token_count++] = operator_token(op_stack[op_count-1]);
+                --op_count;
+            }
+            
+            op_stack[op_count++] = current_op;
+            
+            ++ExpressionString;
+        }
+        else if (*ExpressionString == '(')
+        {
+            op_stack[op_count++] = *ExpressionString;
+            ++ExpressionString;
+        }
+        else if (*ExpressionString == ')')
+        {
+            while (op_count > 0 && op_stack[op_count-1] != '(')
+            {
+                token_output[token_count++] = operator_token(op_stack[op_count-1]);
+                --op_count;
+            }
+            if (op_stack[op_count-1] == '(')
+            {
+                op_count -= 1;
+            }
+            else
+            {
+                *HasError = true;
+                break;
+            }
+            
+            ++ExpressionString;
+        }
+        else
+        {
+            *HasError = true;
+            break;
+        }
+    }
+    
+    for (int i = op_count-1; i >= 0; --i)
+    {
+        token_output[token_count++] = operator_token(op_stack[i]);
+    }
+    
+    //evaluate the tokens
+    float value_stack[50] = {};
+    int value_count = 0;
+    for (int i = 0; i < token_count; ++i)
+    {
+        if (token_output[i].type == Token_Type_Number)
+        {
+            value_stack[value_count++] = token_output[i].as_number;
+        }
+        else if (token_output[i].type == Token_Type_Operator)
+        {
+            if (value_count < 2)
+            {
+                *HasError = true;
+                break;
+            }
+            
+            char op = token_output[i].as_operator;
+            float rhs = value_stack[value_count-1]; 
+            float lhs = value_stack[value_count-2]; 
+            value_count -= 2;
+            
+            float new_value = 0.0f;
+            
+            if (op == '+')
+            {
+                new_value = lhs + rhs;
+            }
+            else if (op == '-')
+            {
+                new_value = lhs - rhs;
+            }
+            else if (op == '*')
+            {
+                new_value = lhs * rhs;
+            }
+            else if (op == '/')
+            {
+                new_value = lhs / rhs;
+            }
+            else
+            {
+                *HasError = true;
+                break;
+            }
+            
+            value_stack[value_count++] = new_value;
+        }
+    }
+    
+    if (value_count == 1)
+    {
+        result = value_stack[0];
+    }
+    else
+    {
+        *HasError = true;
+    }
+    
+    return result;
+}
+
+CUSTOM_COMMAND_SIG(quick_calc)
+{
+    //TODO
+    char command[100] = {};
+    String command_string = make_fixed_width_string(command);
+    
+    Query_Bar command_bar = {};
+    start_query_bar(app, &command_bar, 0);
+    command_bar.prompt = make_lit_string("quick-calc: ");
+    command_bar.string = command_string;
+    
+    for (;;)
+    {
+        User_Input in = get_user_input(app, EventOnAnyKey, EventOnEsc | EventOnButton);
+        if (in.abort) break;
+        
+        if (in.key.keycode == '\n')
+        {
+            bool HasError = false;
+            command[command_bar.string.size] = 0;
+            float Answer = evaluate_expression(command, &HasError);
+            if (HasError)
+            {
+                strcpy(command_bar.string.str, "Failed to parse");
+            }
+            else
+            {
+                snprintf(command, sizeof(command), "%.2f", Answer);
+            }
+            command_bar.string.size = (int32_t)strlen(command_bar.string.str);
+        }
+        else if (in.key.keycode == key_back)
+        {
+            if (command_bar.string.size > 0)
+            {
+                command_bar.string.size -= 1;
+            }
+        }
+        else if (in.key.keycode == 'd')
+        {
+            command_bar.string.size = 0;
+        }
+        else
+        {
+            append_s_char(&command_bar.string, (char)in.key.keycode);
+        }
+    }
+    
+    end_query_bar(app, &command_bar, 0);
+}
+
 static void
 restart_autocompletion()
 {
@@ -795,6 +1128,7 @@ CUSTOM_COMMAND_SIG(command_chord)
         {"dosify", eol_dosify},
         {"nix lines", eol_nixify},
         {"nixify", eol_nixify},
+        {"quick calc", quick_calc},
     };
     
     char command[100] = {};
@@ -824,11 +1158,10 @@ CUSTOM_COMMAND_SIG(command_chord)
                     {
                         if (autocomplete_not_full())
                         {
-                            insert_autocomplete_candidate(commands[i].name, (int32_t)strlen(commands[i].name));
-                            
-                            debug_print("inserted command: ");
-                            debug_print(commands[i].name);
-                            debug_print("\n");
+                            if (!match_ss(command_string, cstr_to_string(commands[i].name)))
+                            {
+                                insert_autocomplete_candidate(commands[i].name, (int32_t)strlen(commands[i].name));
+                            }
                         }
                     }
                 }
@@ -1155,6 +1488,10 @@ custom_keys(Bind_Helper *context){
     bind(context, ']', MDFR_NONE, write_and_auto_tab);
     bind(context, ';', MDFR_NONE, write_and_auto_tab);
     bind(context, '#', MDFR_NONE, write_and_auto_tab);
+    
+    bind(context, '[', MDFR_CTRL, open_long_braces);
+    bind(context, '{', MDFR_CTRL, open_long_braces_semicolon);
+    bind(context, '}', MDFR_CTRL, open_long_braces_break);
     
     bind(context, '\t', MDFR_NONE, word_complete);
     bind(context, '\t', MDFR_CTRL, auto_tab_range);
