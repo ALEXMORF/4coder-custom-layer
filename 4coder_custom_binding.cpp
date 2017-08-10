@@ -1,5 +1,5 @@
-//TODO(Chen): implement a function of GotoAnything(), such as function definition, type definition, macro definition (like the one in sublime text)
 //TODO(Chen): implement builtin imenu feature
+//TODO(Chen): implement a function of GotoAnything(), such as function definition, type definition, macro definition (like the one in sublime text)
 //TODO(Chen): implement builtin ctag feature
 //TODO(Chen): implement the dot command
 //TODO(Chen): have a easier way to change keymaps easily (data-driven instead of code)
@@ -149,6 +149,12 @@ Key_Movement global_key_movements[] = {
 #include <stdarg.h>
 
 inline int32_t
+str_len(char *buffer)
+{
+    return (int32_t)strlen(buffer);
+}
+
+inline int32_t
 max(int32_t a, int32_t b)
 {
     return a > b? a: b;
@@ -157,6 +163,12 @@ max(int32_t a, int32_t b)
 struct Static_String
 {
     char str[100];
+};
+
+struct Jump_Location
+{
+    int32_t buffer_id;
+    int32_t pos;
 };
 
 static struct
@@ -172,6 +184,9 @@ static struct
     int current_index;
     int autocomplete_candidate_count;
     Static_String autocomplete_command_candidates[10];
+    
+    Jump_Location imenu_stack[100];
+    int imenu_stack_count;
 } global_editor_state;
 
 inline void
@@ -244,7 +259,7 @@ CUSTOM_COMMAND_SIG(enter_mode)
     }
     if (mapid == mapid_visual)
     {
-        print_message(app, "enter visual\n", (int32_t)strlen("enter visual\n"));
+        print_message(app, "enter visual\n", str_len("enter visual\n"));
         View_Summary view = get_active_view(app, AccessOpen|AccessProtected);
         global_editor_state.is_in_visual_mode = true;
         global_editor_state.highlight_marker = view.cursor.pos;
@@ -1385,9 +1400,171 @@ CUSTOM_COMMAND_SIG(seek_panel_middle)
     view_set_cursor(app, &view, seek_xy(x, new_y, 0, view.unwrapped_lines), 0);
 }
 
+//TODO
 CUSTOM_COMMAND_SIG(dot_command)
 {
-    //TODO
+    
+}
+
+//TODO
+inline bool
+is_alpha(char character)
+{
+    if ((character >= 'a' && character <= 'z') ||
+        (character >= 'A' && character <= 'Z') ||
+        (character >= '0' && character <= '9') ||
+        (character == '_'))
+    {
+        return true;
+    }
+    return false;
+}
+
+inline void
+insert_char(char *buffer, char character)
+{
+    int length = str_len(buffer);
+    for (int i = length; i > 0; --i)
+    {
+        buffer[i] = buffer[i-1];
+    }
+    buffer[0] = character;
+}
+
+inline void
+get_hot_identifier(Application_Links *app, char *string_buffer)
+{
+    int access = AccessAll;
+    View_Summary view = get_active_view(app, access);
+    Buffer_Summary buffer = get_buffer(app, view.buffer_id, access);
+    int pos = view.cursor.pos;
+    
+    int identifier_begin = pos;
+    while (identifier_begin > 0)
+    {
+        int test_pos = identifier_begin - 1;
+        char read_char = 0;
+        buffer_read_range(app, &buffer, test_pos, identifier_begin, &read_char);
+        if (is_alpha(read_char))
+        {
+            identifier_begin = test_pos;
+        }
+        else
+        {
+            break;
+        }
+    }
+    
+    int identifier_end = pos;
+    while (identifier_end < buffer.size)
+    {
+        int test_pos = identifier_end + 1;
+        char read_char = 0;
+        buffer_read_range(app, &buffer, identifier_end, test_pos, &read_char);
+        if (is_alpha(read_char))
+        {
+            identifier_end = test_pos;
+        }
+        else
+        {
+            break;
+        }
+    }
+    
+    buffer_read_range(app, &buffer, identifier_begin, identifier_end, string_buffer);
+    string_buffer[identifier_end - identifier_begin] = 0;
+}
+
+inline void
+store_current_as_jump_location(int32_t buffer_id, int32_t pos)
+{
+    if (global_editor_state.imenu_stack_count < ArrayCount(global_editor_state.imenu_stack))
+    {
+        global_editor_state.imenu_stack[global_editor_state.imenu_stack_count++] = {buffer_id, pos};
+    }
+    else
+    {
+        for (int i = 0; i < ArrayCount(global_editor_state.imenu_stack) - 1; ++i)
+        {
+            global_editor_state.imenu_stack[i] = global_editor_state.imenu_stack[i+1];
+        }
+        global_editor_state.imenu_stack[global_editor_state.imenu_stack_count-1] = {buffer_id, pos};
+    }
+}
+
+CUSTOM_COMMAND_SIG(imenu)
+{
+    uint32_t access = AccessAll;
+    View_Summary active_view = get_active_view(app, access);
+    
+    char function_name_buffer[100] = {};
+    get_hot_identifier(app, function_name_buffer);
+    String function_name = make_fixed_width_string(function_name_buffer);
+    function_name.size = str_len(function_name_buffer);
+    
+    bool location_found = false;
+    
+    for (Buffer_Summary buffer = get_buffer_first(app, access); 
+         !location_found && buffer.exists; 
+         get_buffer_next(app, &buffer, access))
+    {
+        Temp_Memory temp = begin_temp_memory(&global_part);
+        int32_t token_index = 0;
+        int32_t positions_max = 600;
+        Function_Positions *positions_array = push_array(&global_part, Function_Positions, positions_max);
+        Get_Positions_Results get_positions_results = get_function_positions(app, &buffer, token_index, positions_array, positions_max);
+        
+        for (int i = 0; i < get_positions_results.positions_count; ++i)
+        {
+            int sig_end_pos = positions_array[i].open_paren_pos;
+            char sig_name_buffer[100] = {};
+            
+            char current_char = 0;
+            int end = sig_end_pos;
+            do 
+            {
+                int start = end - 1;
+                buffer_read_range(app, &buffer, start, end, &current_char);
+                
+                if (is_alpha(current_char))
+                {
+                    insert_char(sig_name_buffer, current_char);
+                }
+                
+                end -= 1;
+            } while (end > 0 && is_alpha(current_char));
+            
+            String sig_name = make_fixed_width_string(sig_name_buffer);
+            sig_name.size = str_len(sig_name_buffer);
+            if (match_ss(sig_name, function_name))
+            {
+                store_current_as_jump_location(active_view.buffer_id, active_view.cursor.pos);
+                //Jump to function definition
+                view_set_buffer(app, &active_view, buffer.buffer_id, 0);
+                view_set_cursor(app, &active_view, seek_pos(sig_end_pos), 0);
+                exec_command(app, seek_beginning_of_line);
+                location_found = true;
+                break;
+            }
+        }
+        
+        end_temp_memory(temp);
+    }
+}
+
+CUSTOM_COMMAND_SIG(pop_last_jump_location)
+{
+    int access = AccessAll;
+    View_Summary view = get_active_view(app, access);
+    
+    if (global_editor_state.imenu_stack_count > 0)
+    {
+        Jump_Location jump_loc = global_editor_state.imenu_stack[global_editor_state.imenu_stack_count-1];
+        view_set_buffer(app, &view, jump_loc.buffer_id, 0);
+        view_set_cursor(app, &view, seek_pos(jump_loc.pos), true);
+        
+        --global_editor_state.imenu_stack_count;
+    }
 }
 
 inline void
@@ -1473,6 +1650,8 @@ custom_keys(Bind_Helper *context){
     
     bind(context, 'v', MDFR_NONE, enter_mode<mapid_visual>);
     bind(context, '.', MDFR_NONE, dot_command);
+    bind(context, 'j', MDFR_CTRL, imenu);
+    bind(context, 't', MDFR_CTRL, pop_last_jump_location);
     
     bind(context, 'L', MDFR_NONE, seek_panel_bottom);
     bind(context, 'M', MDFR_NONE, seek_panel_middle);
