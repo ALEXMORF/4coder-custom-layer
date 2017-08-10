@@ -1,4 +1,4 @@
-//TODO(Chen): implement quick calc
+//TODO(Chen): implement builtin ctag feature
 //TODO(Chen): implement the dot command
 //TODO(Chen): have a easier way to change keymaps easily (data-driven instead of code)
 
