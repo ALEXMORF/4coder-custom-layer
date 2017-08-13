@@ -1,4 +1,4 @@
-//TODO(Chen): implement builtin imenu feature
+//TODO(chen): refine imenu() by handling overloaded functions, deleted buffers after being stored into jump stack
 //TODO(Chen): implement a function of GotoAnything(), such as function definition, type definition, macro definition (like the one in sublime text)
 //TODO(Chen): implement builtin ctag feature
 //TODO(Chen): implement the dot command
@@ -18,6 +18,35 @@
 
 #define RIGHT true
 #define LEFT false
+
+#include <stdio.h>
+#include <math.h>
+#include <stdarg.h>
+
+inline int32_t
+str_len(char *buffer)
+{
+    return (int32_t)strlen(buffer);
+}
+
+inline int32_t
+max(int32_t a, int32_t b)
+{
+    return a > b? a: b;
+}
+
+CUSTOM_COMMAND_SIG(load_monter)
+{
+    char *monter_dir = "C:/programming/c++_file/game_project/monter/code/.";
+    char *main_file = "monter.cpp";
+    directory_set_hot(app, monter_dir, str_len(monter_dir));
+    exec_command(app, load_project);
+    
+    int access = AccessOpen|AccessProtected;
+    Buffer_Summary main_file_buffer = get_buffer_by_name(app, main_file, str_len(main_file), access);
+    View_Summary active_view = get_active_view(app, access);
+    view_set_buffer(app, &active_view, main_file_buffer.buffer_id, 0);
+}
 
 CUSTOM_COMMAND_SIG(goto_begin_of_file)
 {
@@ -143,22 +172,6 @@ Key_Movement global_key_movements[] = {
 //
 //
 // System
-
-#include <stdio.h>
-#include <math.h>
-#include <stdarg.h>
-
-inline int32_t
-str_len(char *buffer)
-{
-    return (int32_t)strlen(buffer);
-}
-
-inline int32_t
-max(int32_t a, int32_t b)
-{
-    return a > b? a: b;
-}
 
 struct Static_String
 {
@@ -1141,11 +1154,13 @@ CUSTOM_COMMAND_SIG(command_chord)
         {"open all code", open_all_code},
         {"open all code recursive", open_all_code_recursive},
         {"close all code", close_all_code},
+        {"toggle line wrap", toggle_line_wrap},
         {"dos lines", eol_dosify},
         {"dosify", eol_dosify},
         {"nix lines", eol_nixify},
         {"nixify", eol_nixify},
         {"quick calc", quick_calc},
+        {"load monter", load_monter},
     };
     Custom_Command_Function *command_to_exec = 0;
     
@@ -1543,6 +1558,7 @@ CUSTOM_COMMAND_SIG(imenu)
                 view_set_buffer(app, &active_view, buffer.buffer_id, 0);
                 view_set_cursor(app, &active_view, seek_pos(sig_end_pos), 0);
                 exec_command(app, seek_beginning_of_line);
+                exec_command(app, center_view);
                 location_found = true;
                 break;
             }
