@@ -194,6 +194,8 @@ static struct
     
     bool j_is_pressed = false;
     
+    char LastCommand[100];
+    
     int current_index;
     int autocomplete_candidate_count;
     Static_String autocomplete_command_candidates[10];
@@ -1131,6 +1133,18 @@ get_next_autocomplete_candidate()
     return global_editor_state.autocomplete_command_candidates[global_editor_state.current_index].str;
 }
 
+CUSTOM_COMMAND_SIG(exec_last_command)
+{
+    String system_command = make_string(global_editor_state.LastCommand, str_len(global_editor_state.LastCommand));
+    
+    char directory_buffer[1024];
+    String hot_directory = make_fixed_width_string(directory_buffer);
+    hot_directory.size = directory_get_hot(app, hot_directory.str, hot_directory.memory_size);
+    
+    String out_buffer = make_fixed_width_string(out_buffer_space);
+    exec_system_command(app, 0, buffer_identifier(out_buffer.str, out_buffer.size), hot_directory.str, hot_directory.size, system_command.str, system_command.size, CLI_OverlapWithConflict | CLI_CursorAtEnd);
+}
+
 CUSTOM_COMMAND_SIG(command_chord)
 {
     struct command
@@ -1161,6 +1175,7 @@ CUSTOM_COMMAND_SIG(command_chord)
         {"nixify", eol_nixify},
         {"quick calc", quick_calc},
         {"load monter", load_monter},
+        {"@", exec_last_command},
     };
     Custom_Command_Function *command_to_exec = 0;
     
@@ -1239,6 +1254,8 @@ CUSTOM_COMMAND_SIG(command_chord)
             }
             
             if (match_ss(substr(command_string, 0, 1), make_lit_string("!"))) {
+                strncpy(global_editor_state.LastCommand, command_string.str+1, command_string.size-1);
+                global_editor_state.LastCommand[command_string.size] = 0;
                 String system_command = substr(command_string, 1, command_string.size-1);
                 
                 char directory_buffer[1024];
