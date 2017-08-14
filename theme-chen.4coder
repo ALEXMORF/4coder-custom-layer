@@ -1,9 +1,9 @@
 name = "Chen";
 
 Back = 0xFF222222;
-Margin = 0xFF262626;
-Margin_Hover = 0xFF333333;
-Margin_Active = 0xFF404040;
+Margin = Back;
+Margin_Hover = Back;
+Margin_Active = Back;
 List_Item = Margin;
 List_Item_Hover = Margin_Hover;
 List_Item_Active = Margin_Active;
