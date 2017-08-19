@@ -221,6 +221,44 @@ static void set_current_keymap(struct Application_Links* app, int map) {
     buffer_set_setting(app, &buffer, BufferSetting_MapID, map);
 }
 
+inline int32_t
+seek_char_same_line_forward(Application_Links *app, char character)
+{
+    int32_t access = AccessOpen | AccessProtected;
+    View_Summary view = get_active_view(app, access);
+    Buffer_Summary buffer = get_buffer(app, view.buffer_id, access);
+    
+    int32_t next_ret_pos, char_pos;
+    
+    buffer_seek_delimiter_forward(app, &buffer, view.cursor.pos, character, &char_pos);
+    buffer_seek_delimiter_forward(app, &buffer, view.cursor.pos, '\n', &next_ret_pos);
+    
+    if (char_pos != view.cursor.pos && char_pos <= next_ret_pos)
+    {
+        return char_pos;
+    }
+    return -1;
+}
+
+inline int32_t
+seek_char_same_line_backward(Application_Links *app, char character)
+{
+    int32_t access = AccessOpen | AccessProtected;
+    View_Summary view = get_active_view(app, access);
+    Buffer_Summary buffer = get_buffer(app, view.buffer_id, access);
+    
+    int32_t last_ret_pos, char_pos;
+    
+    buffer_seek_delimiter_backward(app, &buffer, view.cursor.pos, character, &char_pos);
+    buffer_seek_delimiter_backward(app, &buffer, view.cursor.pos, '\n', &last_ret_pos);
+    
+    if (char_pos != view.cursor.pos && char_pos >= last_ret_pos)
+    {
+        return char_pos;
+    }
+    return -1;
+}
+
 CUSTOM_COMMAND_SIG(kill_line)
 {
     //NOTE(chen): accomplished by marking curent pos, mvoe cursor to the end of line, then delete range
@@ -364,21 +402,24 @@ CUSTOM_COMMAND_SIG(delete_highlight)
     enter_mode<mapid_normal>(app);
 }
 
-CUSTOM_COMMAND_SIG(copy_highlight)
+inline void 
+copy_range(Application_Links *app, Buffer_Summary *buffer, Range range)
 {
-    View_Summary view = get_active_view(app, AccessOpen|AccessProtected);
-    Buffer_Summary buffer = get_buffer(app, view.buffer_id, AccessOpen); 
-    Range selected_range = get_visual_highlight_range(app);
-    
-    global_editor_state.clipboard_size = selected_range.end - selected_range.start;
+    global_editor_state.clipboard_size = range.end - range.start;
     if (global_editor_state.clipboard_mem)
     {
         free(global_editor_state.clipboard_mem);
     }
     global_editor_state.clipboard_mem = (char *)malloc(global_editor_state.clipboard_size);
-    
-    buffer_read_range(app, &buffer, selected_range.start, selected_range.end, global_editor_state.clipboard_mem);
-    
+    buffer_read_range(app, buffer, range.start, range.end, global_editor_state.clipboard_mem);
+}
+
+CUSTOM_COMMAND_SIG(copy_highlight)
+{
+    View_Summary view = get_active_view(app, AccessOpen|AccessProtected);
+    Buffer_Summary buffer = get_buffer(app, view.buffer_id, AccessOpen); 
+    Range selected_range = get_visual_highlight_range(app);
+    copy_range(app, &buffer, selected_range);
     exit_visual_mode(app);
     enter_mode<mapid_normal>(app);
 }
@@ -406,6 +447,23 @@ CUSTOM_COMMAND_SIG(paste_editor_clipboard)
     refresh_view(app, &view);
     
     view_set_cursor(app, &view, seek_pos(view.cursor.pos + global_editor_state.clipboard_size), false);
+}
+
+//NOTE(Chen): editor's local clipboard, not OS's
+CUSTOM_COMMAND_SIG(paste_editor_clipboard_under)
+{
+    uint32_t access = AccessOpen;
+    View_Summary view = get_active_view(app, access);
+    Buffer_Summary buffer = get_buffer(app, view.buffer_id, access);
+    
+    exec_command(app, seek_end_of_line);
+    refresh_view(app, &view);
+    
+    int32_t cursor_pos = view.cursor.pos;
+    buffer_replace_range(app, &buffer, cursor_pos, cursor_pos, "\n", 1);
+    view_set_cursor(app, &view, seek_pos(cursor_pos+1), true);
+    
+    exec_command(app, paste_editor_clipboard);
 }
 
 inline char 
@@ -490,26 +548,150 @@ to_digit(char character)
     return character - '0';
 }
 
+struct Char_Pair //this is for deletion inside pair of characters, this is the struct for storing characters that are semantically paired together
+{
+    char begin;
+    char end;
+};
+
+static Char_Pair char_pairs[] = { //all the semantically paired characters in C/C++
+    {'(', ')'},
+    {'[', ']'},
+    {'{', '}'},
+    {'"', '"'},
+    {'\'', '\''},
+    {'<', '>'},
+};
+
+inline char
+get_user_key(Application_Links *app)
+{
+    char result = 0;
+    User_Input in = get_user_input(app, EventOnAnyKey, EventOnEsc);
+    if (in.abort) 
+    {
+        enter_mode<mapid_normal>(app);
+    }
+    else
+    {
+        result = (char)in.key.keycode;
+    }
+    return result;
+}
+
+CUSTOM_COMMAND_SIG(copy_chord)
+{
+    int access = AccessOpen;
+    View_Summary view = get_active_view(app, access);
+    Buffer_Summary buffer = get_buffer(app, view.buffer_id, access);
+    
+    set_theme_color(app, Stag_Cursor, Transient_Color);
+    
+    if (char keycode = get_user_key(app))
+    {
+        if (keycode == 'y')
+        {
+            Range line_range = {};
+            int32_t last_pos = view.cursor.pos;
+            
+            float y = view.cursor.wrapped_y;
+            if (view.unwrapped_lines){
+                y = view.cursor.unwrapped_y;
+            }
+            view_set_cursor(app, &view, seek_xy(0, y, 1, view.unwrapped_lines), 1);
+            line_range.min = view.cursor.pos;
+            view_set_cursor(app, &view, seek_xy(100000.f, y, 1, view.unwrapped_lines), 1);
+            line_range.max = view.cursor.pos;
+            
+            view_set_cursor(app, &view, seek_pos(last_pos), 1);
+            copy_range(app, &buffer, line_range);
+        }
+    }
+    
+    enter_mode<mapid_normal>(app);
+}
+
 CUSTOM_COMMAND_SIG(delete_chord)
 {
+    int access = AccessOpen;
+    View_Summary view = get_active_view(app, access);
+    Buffer_Summary buffer = get_buffer(app, view.buffer_id, access);
+    
     set_theme_color(app, Stag_Cursor, Transient_Color);
     
     User_Input in = get_user_input(app, EventOnAnyKey, EventOnEsc);
     if (!in.abort) 
     {
-        int repeat_time = 1;
-        if (is_digit((char)in.key.keycode))
+        if (in.key.keycode == 'd')
         {
-            repeat_time = to_digit((char)in.key.keycode);
-            in = get_user_input(app, EventOnAnyKey, EventOnEsc);
-        }
-        
-        Key_Movement key_movement = get_key_movement((char)in.key.keycode);
-        if (key_movement.seeker)
-        {
-            for (int i = 0; i < repeat_time; ++i)
+            float y = view.cursor.wrapped_y;
+            if (view.unwrapped_lines){
+                y = view.cursor.unwrapped_y;
+            }
+            view_set_cursor(app, &view, seek_xy(100000.f, y, 1, view.unwrapped_lines), 1);
+            int32_t end_pos = view.cursor.pos;
+            view_set_cursor(app, &view, seek_xy(0, y, 1, view.unwrapped_lines), 1);
+            if (!buffer_replace_range(app, &buffer, view.cursor.pos, end_pos+1, 0, 0))
             {
-                delete_portion(app, key_movement);
+                buffer_replace_range(app, &buffer, view.cursor.pos, end_pos, 0, 0);
+            }
+        }
+        else if (in.key.keycode == 'i')
+        {
+            in = get_user_input(app, EventOnAnyKey, EventOnEsc);
+            if (in.abort)  return;
+            
+            //find the corresponding keypair for 
+            int32_t matched_char_pair_index = -1;
+            for (int char_pair_index = 0; char_pair_index < ArrayCount(char_pairs); ++char_pair_index)
+            {
+                if (char_pairs[char_pair_index].end == (char)in.key.keycode)
+                {
+                    matched_char_pair_index = char_pair_index;
+                    break;
+                }
+            }
+            
+            if (matched_char_pair_index != -1)
+            {
+                char right_char = char_pairs[matched_char_pair_index].end;
+                char left_char = char_pairs[matched_char_pair_index].begin;
+                
+                int32_t right_pos = seek_char_same_line_forward(app, right_char);
+                int32_t left_pos = seek_char_same_line_backward(app, left_char);
+                left_pos += 1; //don't delete left begin char & reposition cursor 1 char before it
+                
+                if (right_pos != -1 && left_pos != -1)
+                {
+                    view_set_cursor(app, &view, seek_pos(left_pos), true);
+                    buffer_replace_range(app, &buffer, left_pos, right_pos, 0, 0);
+                }
+                else
+                {
+                    enter_mode<mapid_normal>(app);
+                }
+            }
+            else
+            {
+                enter_mode<mapid_normal>(app);
+            }
+        }
+        else
+        {
+            int repeat_time = 1;
+            if (in.key.keycode != '0' && is_digit((char)in.key.keycode))
+            {
+                repeat_time = to_digit((char)in.key.keycode);
+                in = get_user_input(app, EventOnAnyKey, EventOnEsc);
+            }
+            
+            Key_Movement key_movement = get_key_movement((char)in.key.keycode);
+            if (key_movement.seeker)
+            {
+                for (int i = 0; i < repeat_time; ++i)
+                {
+                    delete_portion(app, key_movement);
+                }
             }
         }
     }
@@ -521,32 +703,78 @@ CUSTOM_COMMAND_SIG(overwrite_chord)
 {
     set_theme_color(app, Stag_Cursor, Transient_Color);
     
-    User_Input in = get_user_input(app, EventOnAnyKey, EventOnEsc);
-    if (in.abort) 
-    {
-        enter_mode<mapid_normal>(app);
-        return;
-    }
+    int access = AccessOpen;
+    View_Summary view = get_active_view(app, access);
+    Buffer_Summary buffer = get_buffer(app, view.buffer_id, access);
     
-    int repeat_time = 1;
-    if (is_digit((char)in.key.keycode))
-    {
-        repeat_time = to_digit((char)in.key.keycode);
-        in = get_user_input(app, EventOnAnyKey, EventOnEsc);
-    }
+    char keycode = get_user_key(app);
+    if (!keycode) return;
     
-    Key_Movement key_movement = get_key_movement((char)in.key.keycode);
-    if (key_movement.seeker)
+    if (keycode == 'i')
     {
-        for (int i = 0; i < repeat_time; ++i) 
+        keycode = get_user_key(app);
+        if (!keycode) return;
+        
+        //find the corresponding keypair for 
+        int32_t matched_char_pair_index = -1;
+        for (int char_pair_index = 0; char_pair_index < ArrayCount(char_pairs); ++char_pair_index)
         {
-            delete_portion(app, key_movement);
+            if (char_pairs[char_pair_index].end == keycode)
+            {
+                matched_char_pair_index = char_pair_index;
+                break;
+            }
         }
-        enter_mode<mapid_insert>(app);
+        
+        if (matched_char_pair_index != -1)
+        {
+            char right_char = char_pairs[matched_char_pair_index].end;
+            char left_char = char_pairs[matched_char_pair_index].begin;
+            
+            int32_t right_pos = seek_char_same_line_forward(app, right_char);
+            int32_t left_pos = seek_char_same_line_backward(app, left_char);
+            
+            if (right_pos != -1 && left_pos != -1)
+            {
+                left_pos += 1; //don't delete left begin char & reposition cursor 1 char before it
+                
+                view_set_cursor(app, &view, seek_pos(left_pos), true);
+                buffer_replace_range(app, &buffer, left_pos, right_pos, 0, 0);
+                enter_mode<mapid_insert>(app);
+            }
+            else
+            {
+                enter_mode<mapid_normal>(app);
+            }
+        }
+        else
+        {
+            enter_mode<mapid_normal>(app);
+        }
     }
     else
     {
-        enter_mode<mapid_normal>(app);
+        int repeat_time = 1;
+        if (is_digit((char)keycode))
+        {
+            repeat_time = to_digit((char)keycode);
+            User_Input in = get_user_input(app, EventOnAnyKey, EventOnEsc);
+            keycode = (char)in.key.keycode;
+        }
+        
+        Key_Movement key_movement = get_key_movement(keycode);
+        if (key_movement.seeker)
+        {
+            for (int i = 0; i < repeat_time; ++i) 
+            {
+                delete_portion(app, key_movement);
+            }
+            enter_mode<mapid_insert>(app);
+        }
+        else
+        {
+            enter_mode<mapid_normal>(app);
+        }
     }
 }
 
@@ -1600,6 +1828,11 @@ CUSTOM_COMMAND_SIG(pop_last_jump_location)
     }
 }
 
+CUSTOM_COMMAND_SIG(comment_or_uncomment_marked_region)
+{
+    
+}
+
 inline void
 begin_map_shared(Bind_Helper *context, int32_t mapid)
 {
@@ -1612,7 +1845,7 @@ custom_keys(Bind_Helper *context){
     begin_map(context, mapid_shared);
     bind(context, key_esc, MDFR_NONE, enter_mode<mapid_normal>);
     bind(context, 'p', MDFR_CTRL, interactive_open_or_new);
-    bind(context, '\n', MDFR_CTRL, toggle_fullscreen);
+    bind(context, '\n', MDFR_ALT, toggle_fullscreen);
     bind(context, 'E', MDFR_ALT, exit_4coder);
     bind(context, 'z', MDFR_CTRL, undo);
     bind(context, 'I', MDFR_CTRL, list_all_functions_current_buffer);
@@ -1701,7 +1934,9 @@ custom_keys(Bind_Helper *context){
     bind(context, 'g', MDFR_CTRL, goto_line);
     bind(context, 'z', MDFR_NONE, center_view);
     bind(context, ' ', MDFR_NONE, set_mark);
+    bind(context, '/', MDFR_NONE, comment_or_uncomment_marked_region);
     
+    bind(context, 'y', MDFR_NONE, copy_chord);
     bind(context, 'd', MDFR_NONE, delete_chord);
     bind(context, 'c', MDFR_NONE, overwrite_chord);
     bind(context, ';', MDFR_NONE, command_chord);
@@ -1711,6 +1946,7 @@ custom_keys(Bind_Helper *context){
     begin_map_shared(context, mapid_insert);
     bind_vanilla_keys(context, insert_character);
     
+    bind(context, ' ', MDFR_SHIFT, insert_character);
     bind(context, '\n', MDFR_NONE, write_and_auto_tab);
     bind(context, '\n', MDFR_SHIFT, write_and_auto_tab);
     bind(context, '}', MDFR_NONE, write_and_auto_tab);
@@ -1728,6 +1964,7 @@ custom_keys(Bind_Helper *context){
     bind(context, '\t', MDFR_SHIFT, auto_tab_line_at_cursor);
     
     bind(context, key_back, MDFR_NONE, backspace_char);
+    bind(context, key_back, MDFR_SHIFT, backspace_char);
     bind(context, ' ', MDFR_CTRL, set_mark);
     bind(context, '\n', MDFR_NONE, newline_or_goto_position);
     
